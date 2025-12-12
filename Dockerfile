@@ -1,32 +1,37 @@
-# Use a minimal base image (e.g., Python slim or alpine variants)
-FROM python:3.11-slim
+# Use a Python image
+FROM python:3.14-slim
+
+# Copy uv from the official image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 # Set environment variables
-ENV PYTHONUNBUFFERED 1
-ENV APP_HOME /home/simple_time_service
-ENV PORT 8080
+ENV PYTHONUNBUFFERED=1
+ENV APP_HOME=/home/appuser
+ENV PORT=8000
 
 # Create a non-root user and group
 RUN groupadd -r appgroup && useradd -r -g appgroup -m appuser
 
-# Create application directory and set permissions
-RUN mkdir -p ${APP_HOME} && chown -R appuser:appgroup ${APP_HOME}
-
-# Set the working directory to the non-root user's home
+# Set workdir
 WORKDIR ${APP_HOME}
 
-# Copy dependencies and install them
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies using uv
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy the application code
-COPY SimpleTimeService.py .
+COPY main.py .
 
-# Expose the port the app runs on
-EXPOSE ${PORT}
+# Change ownership
+RUN chown -R appuser:appgroup ${APP_HOME}
 
-# Switch to the non-root user BEFORE running the application
+# Switch to non-root user
 USER appuser
 
-# Command to run the application
-CMD ["python", "SimpleTimeService.py"]
+# Expose the port
+EXPOSE ${PORT}
+
+# Run the application
+CMD ["uv", "run", "fastapi", "run", "main.py", "--port", "8000", "--host", "0.0.0.0"]
